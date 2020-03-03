@@ -1,5 +1,4 @@
 #!/bin/bash
-iink=$(printf "http://v3api.dmzj.com/comic/comic_%d.json" $ID)
 
 ID=0
 IFLIST=false
