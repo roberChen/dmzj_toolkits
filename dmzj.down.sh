@@ -102,6 +102,7 @@ printInfo() {
 	name=$(echo $json| jq '.title')
 	ID=$(echo $json | jq '.id')
 	length=$(echo $json | jq '[.chapters[0].data[]] | length' )
+	tags=$(echo $json | jq -c '[.types[].tag_name] | join(",")' 2>/dev/null | sed 's/"//g'  )
 	if [[ $ifhidden == 1 || $is_lock == 1 ]]; then
 		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
 	fi
@@ -109,6 +110,7 @@ printInfo() {
 	printf "\033[32m        NAME\033[0m %*s\t\033[32m          ID\033[0m %s\n" $namelength $name $ID
 	printf "\033[32m LOCK STATUS\033[0m %*d\t\033[32m HIDE STATUS\033[0m %s\n" $namelength $is_lock $ifhidden
 	printf "\033[32mCOMIC STRING\033[0m %*s\t\033[32mFIRST LETTER\033[0m %s\n" $namelength $comic_py $first_letter
+	printf "\033[32m        Tags\033[0m %s\n" $tags
 	printf "%5s\t%s\n" id name
 	echo $json | jq '.chapters[0].data[] | [(.chapter_id|tostring),.chapter_title] | join(" ")' |
 			 sed -e $'s/"//g 
