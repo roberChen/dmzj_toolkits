@@ -7,6 +7,8 @@ DOWNID=""
 DOWNALL=false
 FIRSTLETTER=""
 
+MAIN_PID=$$
+
 isNotNum() {
 	if [[ $# == 0 ]]; then
 		return 2
@@ -99,10 +101,11 @@ printInfo() {
 	comic_py=$(echo $json | jq '.comic_py')
 	name=$(echo $json| jq '.title')
 	ID=$(echo $json | jq '.id')
+	length=$(echo $json | jq '[.chapters[0].data[]] | length' )
 	if [[ $ifhidden == 1 || $is_lock == 1 ]]; then
-		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!\033[0m\n"
+		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
 	fi
-	namelength=$(( $(CharacterLen $name) + 2))
+	namelength=$(( $(CharacterLen $name) + 20))
 	printf "\033[32m        NAME\033[0m %*s\t\033[32m          ID\033[0m %s\n" $namelength $name $ID
 	printf "\033[32m LOCK STATUS\033[0m %*d\t\033[32m HIDE STATUS\033[0m %s\n" $namelength $is_lock $ifhidden
 	printf "\033[32mCOMIC STRING\033[0m %*s\t\033[32mFIRST LETTER\033[0m %s\n" $namelength $comic_py $first_letter
@@ -110,6 +113,7 @@ printInfo() {
 	echo $json | jq '.chapters[0].data[] | [(.chapter_id|tostring),.chapter_title] | join(" ")' |
 			 sed -e $'s/"//g 
 				s/ /\t/g' | sort	
+	printf "\033[33mtotal\033[0m:%d\n" $length
 }
 
 getFirstLetter() {
@@ -123,7 +127,12 @@ getJsInfo() {
 		echo "ID ($ID) not num"
 		exit 1
 	fi
-	echo $(curl "http://v3api.dmzj.com/comic/comic_$ID.json" 2>/dev/null)
+	res=$(curl "http://v3api.dmzj.com/comic/comic_$ID.json" 2>/dev/null)
+	if [[ ! $(echo $res | jq . 2>/dev/null) ]]; then
+		printf "\033[32mERROR: Not a json file\033[0m: %s\n", $res
+ 		kill -s TERM $MAIN_PID
+	fi
+	echo $res
 }
 
 getAllIndex() {
@@ -133,6 +142,7 @@ getAllIndex() {
 
 
 getParams $@
+trap 'exit 1' TERM
 
 echo id: $ID
 
