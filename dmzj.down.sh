@@ -7,6 +7,7 @@ DOWNID=""
 DOWNALL=false
 FIRSTLETTER=""
 JSOUT=false
+ERROR_MESSAGE=""
 
 MAIN_PID=$$
 
@@ -68,24 +69,37 @@ getParams(){
 				JSOUT=true
 				IFLIST=true
 			;;
+			-h | --help)
+				USAGE
+			;;
 			*)
 				echo Unknown param:$1
 				shift
 			;;
 		esac
 	done
-	if [[ $IFLIST == false ]]; then
-		IFDOWN=true
-	fi
 }
 
+USAGE() {
+	printf "Help:\n
+			-i or -id xxx : specific comic id you want to process (must have)\n
+			-l or --list : list info of this comic\n
+			-I or --chaptere-id xxx xxx ... : install the chapters of a comic specified by -i, following \`all\` to download all\n
+			-f or --first-letter x : specify the first letter of the comic when downloading, if it's not set, the script will get it online\n
+			-j or --json: output the info of comic in json and exit, if it's set, no download will process\n
+			-h or --help: print this help\n"
+	exit 0
+}
 
 DownLink() {
 	F=$1 #first letter
 	ID=$2
 	index=$3
 	printf "Downloading: ID %6d,\tchapter id:%6d\n" $ID $index
-	wget -c "http://images.dmzj.com/$F/$ID/$index.zip" --header Host:imgzip.dmzj.com	
+	wget -c -t 1 "http://images.dmzj.com/$F/$ID/$index.zip" --header Host:imgzip.dmzj.com	
+	if [[ $? == 4 ]]; then
+		RaiseError "RMD"
+	fi
 }
 
 CharacterLen() {
@@ -100,18 +114,18 @@ printInfo() {
 	json=$1
 	#$2 tells whether ouput pure json
 	if [[ $2 == true ]]; then
-		echo $json | jq . 1>&2
+		echo $json | jq . 
 		return
 	fi
-	ifhidden=$(echo $json | jq '.hidden' )
-	is_lock=$(echo $json | jq '.is_lock')
-	first_letter=$(echo $json | jq '.first_letter')
-	comic_py=$(echo $json | jq '.comic_py')
-	name=$(echo $json| jq '.title')
-	ID=$(echo $json | jq '.id')
-	length=$(echo $json | jq '[.chapters[0].data[]] | length' )
-	tags=$(echo $json | jq -c '[.types[].tag_name] | join(",")' 2>/dev/null | sed 's/"//g'  )
-	describe=$(echo $json | jq .description 2>/dev/null | sed 's/"//g')
+	ifhidden=$(echo "$json" | jq '.hidden' )
+	is_lock=$(echo "$json" | jq '.is_lock')
+	first_letter=$(echo "$json" | jq '.first_letter')
+	comic_py=$(echo "$json" | jq '.comic_py')
+	name=$(echo "$json" | jq '.title')
+	ID=$(echo "$json" | jq '.id')
+	length=$(echo "$json" | jq '[.chapters[0].data[]] | length' )
+	tags=$(echo "$json" | jq -c '[.types[].tag_name] | join(",")' 2>/dev/null | sed 's/"//g'  )
+	describe=$(echo "$json" | jq .description 2>/dev/null | sed 's/"//g')
 	if [[ $ifhidden == 1 || $is_lock == 1 ]]; then
 		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
 	fi
@@ -130,7 +144,7 @@ printInfo() {
 
 getFirstLetter() {
 	json=$1
-	echo $json | jq '.first_letter' | sed 's/"//g'
+	echo "$json" | jq '.first_letter' | sed 's/"//g'
 }
 
 fetchJsInfo() {
@@ -141,8 +155,7 @@ fetchJsInfo() {
 	fi
 	res=$(curl "http://v3api.dmzj.com/comic/comic_$ID.json" 2>/dev/null)
 	if [[ ! $(echo $res | jq . 2>/dev/null) ]]; then
-		printf "\033[33mERROR: Not a json file\033[0m: %s\n", $res 1>&2
- 		kill -s TERM $MAIN_PID
+		RaiseError "NJF"
 	fi
 	echo $res
 }
@@ -157,32 +170,61 @@ printNotice() {
 	exit 1
 }
 
+printDownErr() {
+	printf "\033[41;33mFAILURE\033[0m\033[33m Downloading failed: This manga might be removed by 动漫之家\033[0m\n"
+}
+
+RaiseError() {
+	kill -s TERM $MAIN_PID
+	ERROR_MESSAGE=$1
+}
+
+HandleError() {
+	case $ERROR_MESSAGE in 
+		HoL) # hidden or locked
+			printNotice
+		;;
+		RMD) # removed by dmzj
+			printDownErr
+			exit 2
+		;;
+		NJF) #not json file
+			printf "\033[33mERROR: Not a json file\033[0m: %s\n", $res 1>&2
+			exit 3	
+		;;
+	esac
+	ERROR_MESSAGE=""
+	# empty the $ERROR_MESSAGE
+}
+
 getParams $@
-trap 'printNotice' TERM
+trap 'HandleError' TERM
 if [[ $IFLIST == true ]]; then
 	printInfo "$(fetchJsInfo $ID)" $JSOUT
 elif [[ $IFDOWN == true ]]; then
 	echo downloading
 	js=""
-	if [[ $FIRSTLETTER == ""  ]]; then
+	if [[ "$FIRSTLETTER" == ""  ]]; then
 		js=$(fetchJsInfo $ID)
-		FIRSTLETTER=$(getFirstLetter $js)
-		printf "Using first letter: \`%s'\n" $FIRSTLETTER
+		FIRSTLETTER=$(getFirstLetter "$js")
+		printf "Using first letter: \`%s'\n" "$FIRSTLETTER"
 	fi
 	if [[ $DOWNALL == true ]]; then
 		echo downloads all
 		if [[ $js == "" ]]; then
 			js=$(fetchJsInfo $ID)
 		fi
-		for id in $(getAllIndex $js)
+		for id in $(getAllIndex "$js")
 		do
-			DownLink $FIRSTLETTER $ID $id	
+			DownLink "$FIRSTLETTER" $ID $id	
 		done	
 	else
 		echo downloads: $DOWNID
 		for id in $DOWNID
 		do
-			DownLink $FIRSTLETTER $ID $id
+			DownLink "$FIRSTLETTER" $ID $id
 		done
 	fi
+elif [[ $IFDOWN == false && $IFLIST == false ]];then
+	printf "Do you mean \`dmzj.down.sh -i %s -l\` ?\n" $ID
 fi
