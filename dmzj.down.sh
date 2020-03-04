@@ -6,6 +6,7 @@ IFDOWN=false
 DOWNID=""
 DOWNALL=false
 FIRSTLETTER=""
+JSOUT=false
 
 MAIN_PID=$$
 
@@ -61,6 +62,12 @@ getParams(){
 				FIRSTLETTER=$1
 				shift
 			;;
+			-j | --json)
+				#out put json info file
+				shift
+				JSOUT=true
+				IFLIST=true
+			;;
 			*)
 				echo Unknown param:$1
 				shift
@@ -91,8 +98,9 @@ CharacterLen() {
 
 printInfo() {
 	json=$1
-	if [[ $# == 2 && $2 == "json" ]]; then
-		echo $json | jq .
+	#$2 tells whether ouput pure json
+	if [[ $2 == true ]]; then
+		echo $json | jq . 1>&2
 		return
 	fi
 	ifhidden=$(echo $json | jq '.hidden' )
@@ -103,14 +111,16 @@ printInfo() {
 	ID=$(echo $json | jq '.id')
 	length=$(echo $json | jq '[.chapters[0].data[]] | length' )
 	tags=$(echo $json | jq -c '[.types[].tag_name] | join(",")' 2>/dev/null | sed 's/"//g'  )
+	describe=$(echo $json | jq .description 2>/dev/null | sed 's/"//g')
 	if [[ $ifhidden == 1 || $is_lock == 1 ]]; then
 		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
 	fi
 	namelength=$(( $(CharacterLen $name) + 20))
-	printf "\033[32m        NAME\033[0m %*s\t\033[32m          ID\033[0m %s\n" $namelength $name $ID
+	printf "\033[32m        NAME\033[0m %*s\t\033[32m          ID\033[0m %s\n" $namelength "$name" $ID
 	printf "\033[32m LOCK STATUS\033[0m %*d\t\033[32m HIDE STATUS\033[0m %s\n" $namelength $is_lock $ifhidden
 	printf "\033[32mCOMIC STRING\033[0m %*s\t\033[32mFIRST LETTER\033[0m %s\n" $namelength $comic_py $first_letter
 	printf "\033[32m        Tags\033[0m %s\n" $tags
+	printf "\033[32m Description\033[0m %s\n" $describe
 	printf "%5s\t%s\n" id name
 	echo $json | jq '.chapters[0].data[] | [(.chapter_id|tostring),.chapter_title] | join(" ")' |
 			 sed -e $'s/"//g 
@@ -123,7 +133,7 @@ getFirstLetter() {
 	echo $json | jq '.first_letter' | sed 's/"//g'
 }
 
-getJsInfo() {
+fetchJsInfo() {
 	ID=$1
 	if isNotNum $ID ; then
 		echo "ID ($ID) not num"
@@ -131,7 +141,7 @@ getJsInfo() {
 	fi
 	res=$(curl "http://v3api.dmzj.com/comic/comic_$ID.json" 2>/dev/null)
 	if [[ ! $(echo $res | jq . 2>/dev/null) ]]; then
-		printf "\033[32mERROR: Not a json file\033[0m: %s\n", $res
+		printf "\033[33mERROR: Not a json file\033[0m: %s\n", $res 1>&2
  		kill -s TERM $MAIN_PID
 	fi
 	echo $res
@@ -142,27 +152,27 @@ getAllIndex() {
 	echo $json | jq '.chapters[0].data[] | [.chapter_id | tostring] | join(" ")' | sed 's/"//g'
 }
 
+printNotice() {
+	printf "\033[043;91mNOTICE\033[0m\033[33m Some Comic has been hidden or lock by 动漫之家 due to \033[31mDMCA\033[33m or local law, usually you can try fetching the comic info again at night (About 20 o'clock)\033[0m\n"
+	exit 1
+}
 
 getParams $@
-trap 'exit 1' TERM
-
-echo id: $ID
-
+trap 'printNotice' TERM
 if [[ $IFLIST == true ]]; then
-	echo listing
-	printInfo $(getJsInfo $ID)
+	printInfo "$(fetchJsInfo $ID)" $JSOUT
 elif [[ $IFDOWN == true ]]; then
 	echo downloading
 	js=""
 	if [[ $FIRSTLETTER == ""  ]]; then
-		js=$(getJsInfo $ID)
+		js=$(fetchJsInfo $ID)
 		FIRSTLETTER=$(getFirstLetter $js)
 		printf "Using first letter: \`%s'\n" $FIRSTLETTER
 	fi
 	if [[ $DOWNALL == true ]]; then
 		echo downloads all
 		if [[ $js == "" ]]; then
-			js=$(getJsInfo $ID)
+			js=$(fetchJsInfo $ID)
 		fi
 		for id in $(getAllIndex $js)
 		do
