@@ -7,9 +7,12 @@ DOWNID=""
 DOWNALL=false
 FIRSTLETTER=""
 JSOUT=false
-ERROR_MESSAGE=""
 
-MAIN_PID=$$
+export MAIN_PID=$$
+
+if [ ! -d "~/.dmzj" ]; then
+	mkdir ~/.dmzj
+fi
 
 isNotNum() {
 	if [[ $# == 0 ]]; then
@@ -24,7 +27,7 @@ isNotNum() {
 getParams(){
 	if [[ $# == 0 ]]; then
 		printf 'Message: id needed\n'
-		exit 0
+		defer 0
 	fi
 	
 	while (( $# >= 1 ))
@@ -39,7 +42,7 @@ getParams(){
 				# elif [ -n "$(echo $ID | sed '/^[0-9][0-9]*$/d')" ]; then
 				elif isNotNum $ID; then
 					printf "Error: ID \`%s' not number\n" $ID
-					exit 1
+					defer 1
 				fi
 				shift
 			;;
@@ -86,9 +89,9 @@ USAGE() {
 			-l or --list : list info of this comic\n
 			-I or --chaptere-id xxx xxx ... : install the chapters of a comic specified by -i, following \`all\` to download all\n
 			-f or --first-letter x : specify the first letter of the comic when downloading, if it's not set, the script will get it online\n
-			-j or --json: output the info of comic in json and exit, if it's set, no download will process\n
+			-j or --json: output the info of comic in json and defer, if it's set, no download will process\n
 			-h or --help: print this help\n"
-	exit 0
+	defer 0
 }
 
 DownLink() {
@@ -127,7 +130,7 @@ printInfo() {
 	tags=$(echo "$json" | jq -c '[.types[].tag_name] | join(",")' 2>/dev/null | sed 's/"//g'  )
 	describe=$(echo "$json" | jq .description 2>/dev/null | sed 's/"//g')
 	if [[ $ifhidden == 1 || $is_lock == 1 ]]; then
-		printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
+		 printf "\033[43;91mWARNNING\033[0m\033[33m This Comic is hiddeen or locked by 动漫之家, please  get comic info at night!(Around 20 o'clock at night)\033[0m\n"
 	fi
 	namelength=$(( $(CharacterLen $name) + 20))
 	printf "\033[32m        NAME\033[0m %*s\t\033[32m          ID\033[0m %s\n" $namelength "$name" $ID
@@ -151,11 +154,11 @@ fetchJsInfo() {
 	ID=$1
 	if isNotNum $ID ; then
 		echo "ID ($ID) not num"
-		exit 1
+		defer 1
 	fi
 	res=$(curl "http://v3api.dmzj.com/comic/comic_$ID.json" 2>/dev/null)
 	if [[ ! $(echo $res | jq . 2>/dev/null) ]]; then
-		RaiseError "NJF"
+		RaiseError "NJF" $res
 	fi
 	echo $res
 }
@@ -166,34 +169,44 @@ getAllIndex() {
 }
 
 printNotice() {
-	printf "\033[043;91mNOTICE\033[0m\033[33m Some Comic has been hidden or lock by 动漫之家 due to \033[31mDMCA\033[33m or local law, usually you can try fetching the comic info again at night (About 20 o'clock)\033[0m\n"
-	exit 1
+	printf "\033[41;93mNOTICE\033[0m\033[33m Some Comic has been hidden or lock by 动漫之家 due to \033[31mDMCA\033[33m or local law, usually you can try fetching the comic info again at night (About 20 o'clock)\033[0m\n"
+	defer 1
 }
 
 printDownErr() {
 	printf "\033[41;33mFAILURE\033[0m\033[33m Downloading failed: This manga might be removed by 动漫之家\033[0m\n"
 }
 
+defer() {
+	rm -rf ~/.dmzj
+	exit $1
+}
+
 RaiseError() {
 	kill -s TERM $MAIN_PID
-	ERROR_MESSAGE=$1
+	echo $1 > ~/.dmzj/err
+	echo $2 > ~/.dmzj/err_msg
 }
 
 HandleError() {
-	case $ERROR_MESSAGE in 
-		HoL) # hidden or locked
+	ERROR=$(cat ~/.dmzj/err)
+	ERROR_MSG=$(cat ~/.dmzj/err_msg)
+	case "$ERROR" in 
+		"HoL") # hidden or locked
 			printNotice
 		;;
-		RMD) # removed by dmzj
+		"RMD") # removed by dmzj
 			printDownErr
-			exit 2
+			defer 2
 		;;
-		NJF) #not json file
-			printf "\033[33mERROR: Not a json file\033[0m: %s\n", $res 1>&2
-			exit 3	
+		"NJF") #not json file
+			printf "\033[33mERROR: Not a json file\033[0m: %s\n", $ERROR_MSG 1>&2
+			printNotice
+			defer 3	
 		;;
 	esac
-	ERROR_MESSAGE=""
+	echo > ~/.dmzj/err
+	echo > ~/.dmzj/err_msg
 	# empty the $ERROR_MESSAGE
 }
 
