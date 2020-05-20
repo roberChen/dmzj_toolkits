@@ -53,6 +53,7 @@ getParams(){
 			;;
 			-I | --chapter-id )
 				#Get the id of chapters for downloading
+				IFDOWN=true
 				shift
 				if [[ $1 == "all" ]]; then
 					DOWNALL=true
