@@ -17,7 +17,7 @@ getSpecific() {
 				-i| --id)
 					shift
 					STARTID=$1
-					if [ -n $(echo $STARTID | sed '/^[0-9][0-9]*$/d') ] || (( $STARTID < 0 )); then
+					if [ -z "${STARTID%[0-9]*}" ] || (( $STARTID < 0 )); then
 						echo Invalid STARTID
 						exit
 					fi
@@ -26,7 +26,7 @@ getSpecific() {
 				-e| --end)
 					shift
 					ENDID=$1
-					if [ -n $(echo $ENDID | sed '/^[0-9][0-9]*$/d') ] || (( $ENDID < 0 )); then
+					if [ -z "${ENDID%[0-9]*}" ] || (( $ENDID < 0 )); then
 						echo Invalid ENDID
 						exit
 					fi
