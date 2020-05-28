@@ -2,10 +2,44 @@
 
 SPECIFIC=false
 SPECIFIC_TAG=""
+STARTID=1
+ENDID=30000
+getSpecific() {
+	while (( $# >= 1 ))
+		do
+			case $1 in 
+				-t| --tag)
+					shift
+					SPECIFIC=true
+					shift
+					SPECIFIC_TAG=$1
+					;;
+				-i| --id)
+					shift
+					STARTID=$1
+					if [ -n $(echo $STARTID | sed '/^[0-9][0-9]*$/d') ] || (( $STARTID < 0 )); then
+						echo Invalid STARTID
+						exit
+					fi
+					shift
+					;;
+				-e| --end)
+					shift
+					ENDID=$1
+					if [ -n $(echo $ENDID | sed '/^[0-9][0-9]*$/d') ] || (( $ENDID < 0 )); then
+						echo Invalid ENDID
+						exit
+					fi
+					shift
+					;;
 
+			esac
+		done
+}
 
+getSpecific $@
 
-for id in {0..30000}; do
+for id in $(seq $STARTID $ENDID); do
 	out=$(curl $(printf "http://v3api.dmzj.com/comic/comic_%d.json" $id) 2>/dev/null | jq . 2>/dev/null )
 	if [[ $? != 0 ]]; then
 		printf "Fetch content of id %6d falied: not json\n" $id
@@ -23,13 +57,3 @@ for id in {0..30000}; do
 	fi
 done
 
-#getSpecific() {
-#	if [[ $# == 1 ]];then
-#		return
-#	fi
-#	
-#	case $2 in 
-#	-t|--tag)
-#		shift # pop the -t or --tag parameter and 
-#	;;
-#}
