@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SPECIFIC=false
-SPECIFIC_TAG=""
+SPECIFIC_TAG="百合"
 STARTID=1
 ENDID=30000
 getSpecific() {
@@ -49,7 +49,7 @@ for id in $(seq $STARTID $ENDID); do
 		tag=$(echo $out | jq .types[].tag_name 2>/dev/null | sed 's/"//g')
 		if [[  $name == "" || $name == "null" ]]; then
 			printf "Fetch content of id %6d failed: no title found\n" $id
-		elif [[ $(echo $tag | grep 百合) != "" && $ifhidden == 1 ]]; then
+		elif [[ $(echo $tag | grep "$SPECIFIC_TAG" ) != "" && $ifhidden == 1 ]]; then
 			printf "id:%6.6d\thidden:%d\tname:%s\ttype:%s\n" $id $ifhidden "$(echo $name | sed 's/"//g')" "$(echo $tag| sed 's/ /,/g')" | tee -a bh.dmzj.scan | tee -a dmzj.com
 		else
 			printf "id:%6.6d\tname:%s\ttag:%s\n" $id "$(echo $name | sed 's/"//g')" "$(echo $tag | sed 's/ /,/g')" | tee -a dmzj.scan	
